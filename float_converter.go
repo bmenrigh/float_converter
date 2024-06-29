@@ -60,14 +60,24 @@ func float_to_string(f *float_plus) (bool, string) {
 
 	lmant := append([]bool{true}, f.Mantissa...)
 
+	fmt.Fprint(os.Stderr, "local mantissa bits: ")
+	for i := 0; i < len(lmant); i++ {
+		if lmant[i] {
+			fmt.Fprint(os.Stderr, "1")
+		} else {
+			fmt.Fprint(os.Stderr, "0")
+		}
+	}
+	fmt.Fprint(os.Stderr, "\n")
+
 	// Check and do padding with zeros on the right if needed
-	if exp > f.ManWidth + 1 {
-		lmant = append(lmant, make([]bool, exp - (f.ManWidth + 1))...)
+	if exp > f.ManWidth {
+		lmant = append(lmant, make([]bool, exp - f.ManWidth)...)
 	}
 
 	// Check and do padding with zeros on the left if needed
-	if exp < 0 {
-		lmant = append(make([]bool, 0 - exp), lmant...)
+	if exp < -1 {
+		lmant = append(make([]bool, -1 - exp), lmant...)
 	}
 
 	var ipart []bool
@@ -79,7 +89,7 @@ func float_to_string(f *float_plus) (bool, string) {
 		fpart = make([]bool, 0)
 	} else if exp >= 0 {        // some int, some frac
 		ipart = make([]bool, exp + 1)
-		fpart = make([]bool, (len(lmant) - 1) - int(exp + 1))
+		fpart = make([]bool, len(lmant) - int(exp + 1))
 		copy(ipart, lmant[:exp + 1])
 		copy(fpart, lmant[exp + 1:])
 	} else {                   // all frac
@@ -173,10 +183,49 @@ func main() {
 	f.Mantissa = make([]bool, f.ManWidth)
 
 	// 1.75
-	f.Exponent = []bool{false, true, true, true, true, true, true, true}
+	// f.Exponent = []bool{false, true, true, true, true, true, true, true}
+	// f.Mantissa[0] = true
+	// f.Mantissa[1] = true
+
+	// 3.5
+	// f.Exponent = []bool{true, false, false, false, false, false, false, false}
+	// f.Mantissa[0] = true
+	// f.Mantissa[1] = true
+
+	// 2.0000002384185791015625
+	//f.Exponent = []bool{true, false, false, false, false, false, false, false}
+	//f.Mantissa[22] = true
+
+	// 0.5
+	//f.Exponent = []bool{false, true, true, true, true, true, true, false}
+
+	// 0.1328125
+	//f.Exponent = []bool{false, true, true, true, true, true, false, false}
+	//f.Mantissa[3] = true
+
+	// 1.248962747748680477216783E-38
+	//f.Exponent = []bool{false, false, false, false, false, false, false, true}
+	//f.Mantissa[3] = true
+
+	// 237684506432258944259212705792
+	// f.Exponent = []bool{true, true, true, false, false, false, false, false}
+	// f.Mantissa[0] = true
+	// f.Mantissa[22] = true
+
+	// 6291456.5
+	// f.Exponent = []bool{true, false, false, true, false, true, false, true}
+	// f.Mantissa[0] = true
+	// f.Mantissa[22] = true
+
+	// 12582913
+	// f.Exponent = []bool{true, false, false, true, false, true, true, false}
+	// f.Mantissa[0] = true
+	// f.Mantissa[22] = true
+
+	// 25165826
+	f.Exponent = []bool{true, false, false, true, false, true, true, true}
 	f.Mantissa[0] = true
-	f.Mantissa[1] = true
-	f.Mantissa[20] = true
+	f.Mantissa[22] = true
 
 
 	ok, s := float_to_string(f)
