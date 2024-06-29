@@ -12,7 +12,7 @@ type float_plus struct{
 	ExpWidth int32
 	ExpOffset int32
 	ManWidth int32
-	CanDenorm bool
+	AllowSubnorm bool
 	Sign bool
 	Exponent []bool
 	Mantissa []bool
@@ -42,6 +42,7 @@ func float_from_uint32(v uint32) *float_plus {
 	f.ExpWidth = 8
 	f.ExpOffset = 127
 	f.ManWidth = 23
+	f.AllowSubnorm = true
 
 	f.Exponent = make([]bool, f.ExpWidth)
 	f.Mantissa = make([]bool, f.ManWidth)
@@ -77,6 +78,7 @@ func float_from_uint64(v uint64) *float_plus {
 	f.ExpWidth = 11
 	f.ExpOffset = 1023
 	f.ManWidth = 52
+	f.AllowSubnorm = true
 
 	f.Exponent = make([]bool, f.ExpWidth)
 	f.Mantissa = make([]bool, f.ManWidth)
@@ -141,7 +143,12 @@ func float_to_string(f *float_plus) (bool, string) {
 	lmant := make([]bool, f.ManWidth)
 	copy(lmant, f.Mantissa)
 
-	lmant = append([]bool{true}, lmant...)
+	if !f.AllowSubnorm || (exp != 0 - f.ExpOffset) {
+		lmant = append([]bool{true}, lmant...)
+	} else {
+		fmt.Fprint(os.Stderr, "subnormal number\n")
+		//lmant = append([]bool{false}, lmant...)
+	}
 
 	fmt.Fprint(os.Stderr, "local mantissa bits: ")
 	for i := 0; i < len(lmant); i++ {
@@ -261,6 +268,7 @@ func main() {
 	// f.ExpWidth = 8
 	// f.ExpOffset = 127
 	// f.ManWidth = 23
+	// f.AllowSubnorm = true
 
 	// f.Exponent = make([]bool, f.ExpWidth)
 	// f.Mantissa = make([]bool, f.ManWidth)
@@ -311,7 +319,16 @@ func main() {
 	//f.Mantissa[22] = true
 
 
-	f := float_from_uint32(0x40490fdb) // Pi -- 3.1415927410125732421875
+	// f := float_from_uint32(0x40490fdb) // Pi -- 3.1415927410125732421875
+
+	// ok, s := float_to_string(f)
+
+	// if ok {
+	// 	fmt.Printf("%s\n", s)
+	// }
+
+
+	f := float_from_uint32(0x00400000) // Subnormal 5.877471754111437539843683E-39
 
 	ok, s := float_to_string(f)
 
@@ -320,7 +337,15 @@ func main() {
 	}
 
 
-	d := float_from_uint64(0x400921FB54442D18) // Pi
+	// d := float_from_uint64(0x400921FB54442D18) // Pi
+
+	// ok, s = float_to_string(d)
+
+	// if ok {
+	// 	fmt.Printf("%s\n", s)
+	// }
+
+	d := float_from_uint64(0x000FFFFFFFFFFFFF) // Max subnormal 2.2250738585072009 * 10^-308
 
 	ok, s = float_to_string(d)
 
