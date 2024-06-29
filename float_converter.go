@@ -35,6 +35,76 @@ func validate_float(f *float_plus) bool {
 }
 
 
+func float_from_uint32(v uint32) *float_plus {
+
+	f := new(float_plus)
+
+	f.ExpWidth = 8
+	f.ExpOffset = 127
+	f.ManWidth = 23
+
+	f.Exponent = make([]bool, f.ExpWidth)
+	f.Mantissa = make([]bool, f.ManWidth)
+
+	for i := int32(0); i < f.ManWidth; i++ {
+		if v % 2 == 1 {
+			f.Mantissa[(f.ManWidth - 1) - i] = true
+		}
+
+		v /= 2
+	}
+
+	for i := int32(0); i < f.ExpWidth; i++ {
+		if v % 2 == 1 {
+			f.Exponent[(f.ExpWidth - 1) - i] = true
+		}
+
+		v /= 2
+	}
+
+	if v > 0 {
+		f.Sign = true
+	}
+
+	return f
+}
+
+
+func float_from_uint64(v uint64) *float_plus {
+
+	f := new(float_plus)
+
+	f.ExpWidth = 11
+	f.ExpOffset = 1023
+	f.ManWidth = 52
+
+	f.Exponent = make([]bool, f.ExpWidth)
+	f.Mantissa = make([]bool, f.ManWidth)
+
+	for i := int32(0); i < f.ManWidth; i++ {
+		if v % 2 == 1 {
+			f.Mantissa[(f.ManWidth - 1) - i] = true
+		}
+
+		v /= 2
+	}
+
+	for i := int32(0); i < f.ExpWidth; i++ {
+		if v % 2 == 1 {
+			f.Exponent[(f.ExpWidth - 1) - i] = true
+		}
+
+		v /= 2
+	}
+
+	if v > 0 {
+		f.Sign = true
+	}
+
+	return f
+}
+
+
 func float_to_string(f *float_plus) (bool, string) {
 
 	if !validate_float(f) {
@@ -46,6 +116,16 @@ func float_to_string(f *float_plus) (bool, string) {
 	exp = 0
 	bdigit= 1;
 
+	fmt.Fprint(os.Stderr, "exp bits: ")
+	for i := int32(0); i < f.ExpWidth; i++ {
+		if f.Exponent[i] {
+			fmt.Fprint(os.Stderr, "1")
+		} else {
+			fmt.Fprint(os.Stderr, "0")
+		}
+	}
+	fmt.Fprint(os.Stderr, "\n")
+
 	for i := f.ExpWidth - 1; i >= 0; i-- {
 		if f.Exponent[i] {
 			exp += bdigit
@@ -56,9 +136,12 @@ func float_to_string(f *float_plus) (bool, string) {
 
 	exp -= f.ExpOffset
 
-	fmt.Fprintf(os.Stderr, "exp: %d\n", exp)
+	fmt.Fprintf(os.Stderr, "exp val: %d\n", exp)
 
-	lmant := append([]bool{true}, f.Mantissa...)
+	lmant := make([]bool, f.ManWidth)
+	copy(lmant, f.Mantissa)
+
+	lmant = append([]bool{true}, lmant...)
 
 	fmt.Fprint(os.Stderr, "local mantissa bits: ")
 	for i := 0; i < len(lmant); i++ {
@@ -173,14 +256,14 @@ func float_to_string(f *float_plus) (bool, string) {
 
 func main() {
 
-	f := new(float_plus)
+	// f := new(float_plus)
 
-	f.ExpWidth = 8
-	f.ExpOffset = 127
-	f.ManWidth = 23
+	// f.ExpWidth = 8
+	// f.ExpOffset = 127
+	// f.ManWidth = 23
 
-	f.Exponent = make([]bool, f.ExpWidth)
-	f.Mantissa = make([]bool, f.ManWidth)
+	// f.Exponent = make([]bool, f.ExpWidth)
+	// f.Mantissa = make([]bool, f.ManWidth)
 
 	// 1.75
 	// f.Exponent = []bool{false, true, true, true, true, true, true, true}
@@ -223,12 +306,23 @@ func main() {
 	// f.Mantissa[22] = true
 
 	// 25165826
-	f.Exponent = []bool{true, false, false, true, false, true, true, true}
-	f.Mantissa[0] = true
-	f.Mantissa[22] = true
+	//f.Exponent = []bool{true, false, false, true, false, true, true, true}
+	//f.Mantissa[0] = true
+	//f.Mantissa[22] = true
 
+
+	f := float_from_uint32(0x40490fdb) // Pi -- 3.1415927410125732421875
 
 	ok, s := float_to_string(f)
+
+	if ok {
+		fmt.Printf("%s\n", s)
+	}
+
+
+	d := float_from_uint64(0x400921FB54442D18) // Pi
+
+	ok, s = float_to_string(d)
 
 	if ok {
 		fmt.Printf("%s\n", s)
