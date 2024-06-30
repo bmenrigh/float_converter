@@ -20,6 +20,33 @@ type float_plus struct{
 }
 
 
+func float_dump_string(f *float_plus) string {
+
+	sign := "0"
+	if f.Sign {
+		sign = "1"
+	}
+
+	return fmt.Sprintf("float%d (1 / %d / %d): %s %s %s\n", 1 + f.ExpWidth + f.ManWidth, f.ExpWidth, f.ManWidth, sign, bits_to_string(f.Exponent), bits_to_string(f.Mantissa))
+}
+
+
+func bits_to_string(b []bool) string {
+
+	bstr := make([]byte, 0, len(b))
+
+	for _, v := range b {
+		if v {
+			bstr = append(bstr, byte('1'))
+		} else {
+			bstr = append(bstr, byte('0'))
+		}
+	}
+
+	return string(bstr)
+}
+
+
 func validate_float(f *float_plus) bool {
 
 	if int32(len(f.Exponent)) != f.ExpWidth {
@@ -119,15 +146,7 @@ func float_to_string(f *float_plus, scinot bool) (bool, string) {
 	exp = 0
 	bdigit= 1;
 
-	fmt.Fprint(os.Stderr, "exp bits: ")
-	for i := int32(0); i < f.ExpWidth; i++ {
-		if f.Exponent[i] {
-			fmt.Fprint(os.Stderr, "1")
-		} else {
-			fmt.Fprint(os.Stderr, "0")
-		}
-	}
-	fmt.Fprint(os.Stderr, "\n")
+	fmt.Fprint(os.Stderr, "exp bits: %s\n", bits_to_string(f.Exponent))
 
 	for i := f.ExpWidth - 1; i >= 0; i-- {
 		if f.Exponent[i] {
@@ -151,15 +170,7 @@ func float_to_string(f *float_plus, scinot bool) (bool, string) {
 		//lmant = append([]bool{false}, lmant...)
 	}
 
-	fmt.Fprint(os.Stderr, "local mantissa bits: ")
-	for i := 0; i < len(lmant); i++ {
-		if lmant[i] {
-			fmt.Fprint(os.Stderr, "1")
-		} else {
-			fmt.Fprint(os.Stderr, "0")
-		}
-	}
-	fmt.Fprint(os.Stderr, "\n")
+	fmt.Fprint(os.Stderr, "local mantissa bits: %s\n", bits_to_string(lmant))
 
 	// Check and do padding with zeros on the right if needed
 	if exp > f.ManWidth {
@@ -189,25 +200,8 @@ func float_to_string(f *float_plus, scinot bool) (bool, string) {
 		copy(fpart, lmant)
 	}
 
-	fmt.Fprint(os.Stderr, "ipart bits: ")
-	for i := 0; i < len(ipart); i++ {
-		if ipart[i] {
-			fmt.Fprint(os.Stderr, "1")
-		} else {
-			fmt.Fprint(os.Stderr, "0")
-		}
-	}
-	fmt.Fprint(os.Stderr, "\n")
-
-	fmt.Fprint(os.Stderr, "fpart bits: ")
-	for i := 0; i < len(fpart); i++ {
-		if fpart[i] {
-			fmt.Fprint(os.Stderr, "1")
-		} else {
-			fmt.Fprint(os.Stderr, "0")
-		}
-	}
-	fmt.Fprint(os.Stderr, "\n")
+	fmt.Fprint(os.Stderr, "ipart bits: %s\n", bits_to_string(ipart))
+	fmt.Fprint(os.Stderr, "fpart bits: %s\n", bits_to_string(fpart))
 
 
 	inum := big.NewInt(0)
@@ -291,7 +285,7 @@ func float_from_string(f *float_plus, s string) bool {
 		s = s[1:] // reslice to get rid of negative sign
 	}
 
-	fmt.Fprintf(os.Stderr, "is negative: %t\n", is_neg);
+	fmt.Fprintf(os.Stderr, "is negative: %t\n", is_neg)
 
 	s_parts := strings.Split(s, ".")
 
@@ -316,6 +310,10 @@ func float_from_string(f *float_plus, s string) bool {
 	fmt.Fprintf(os.Stderr, "got ipart: %s\n", inum.Text(10))
 	fmt.Fprintf(os.Stderr, "got fpart: %s\n", fnum.Text(10))
 
+	seen_one := false
+	if inum.Cmp(big.NewInt(0)) != 0 {
+		seen_one = true
+	}
 
 	ibits := make([]bool, 0)
 
@@ -333,47 +331,137 @@ func float_from_string(f *float_plus, s string) bool {
 	// Now put the bits in the correct "BE" order
 	slices.Reverse(ibits)
 
-	fmt.Fprintf(os.Stderr, "Got inum bits: ");
-	for i := 0; i < len(ibits); i++ {
-		if ibits[i] {
-			fmt.Fprint(os.Stderr, "1")
-		} else {
-			fmt.Fprint(os.Stderr, "0")
-		}
+	fmt.Fprintf(os.Stderr, "Got inum bits: %s\n", bits_to_string(ibits))
+
+	mant_used := int32(0)
+	if seen_one {
+		mant_used = int32(len(ibits) - 1) // 1 less because because of the implicit 1 normalization
 	}
-	fmt.Fprint(os.Stderr, "\n")
 
 
 	flimit := big.NewInt(1)
-
-	for i := 0; i < len(s_parts[1]); i++ {
-		flimit = new(big.Int).Mul(flimit, big.NewInt(10))
+	if len(s_parts) > 1 {
+		for i := 0; i < len(s_parts[1]); i++ {
+			flimit = new(big.Int).Mul(flimit, big.NewInt(10))
+		}
 	}
 
 	fbits := make([]bool, 0)
-	for fnum.Cmp(big.NewInt(0)) > 0 {
+	for fnum.Cmp(big.NewInt(0)) > 0 && mant_used <= f.ManWidth {
 		fnum = new(big.Int).Mul(fnum, big.NewInt(2))
+
+		// This intentionally doesn't count the first 1 seen since
+		// it will be implicit with normalization
+		if seen_one {
+			mant_used++
+		}
 
 		if fnum.Cmp(flimit) >= 0 {
 			fbits = append(fbits, true)
-
 			fnum = new(big.Int).Sub(fnum, flimit)
+
+			if !seen_one {
+				seen_one = true
+			}
 		} else {
 			fbits = append(fbits, false)
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "Got fnum bits: ");
-	for i := 0; i < len(fbits); i++ {
-		if fbits[i] {
-			fmt.Fprint(os.Stderr, "1")
-		} else {
-			fmt.Fprint(os.Stderr, "0")
+	fmt.Fprintf(os.Stderr, "Got fnum bits: %s\n", bits_to_string(fbits))
+
+	// Local mantissa (explicitly has normall implicit 1)
+	lmant := append(ibits, fbits...)
+
+	// find first one
+	first_one := 0
+	for i := 0; i < len(lmant); i++ {
+		if lmant[i] {
+			first_one = i
+			break
 		}
 	}
-	fmt.Fprint(os.Stderr, "\n")
 
-	return true
+	fmt.Fprintf(os.Stderr, "First 1 in local mantissa at %d\n", first_one)
+
+	// reslice to remove leading zeros
+	lmant = lmant[first_one:]
+
+	fmt.Fprintf(os.Stderr, "Initial local mantissa bits: %s\n", bits_to_string(lmant))
+
+	carry := false
+	if int32(len(lmant)) <= f.ManWidth + 1 {
+		// pad out with zeros
+		for i := int32(len(lmant)); i <= f.ManWidth; i++ {
+			lmant = append(lmant, false)
+		}
+	} else {
+		// we got more bits than will fit so we need to round
+
+		carry = lmant[f.ManWidth + 1]
+		// truncate
+		lmant = lmant[:f.ManWidth + 1]
+
+		for i := f.ManWidth; i >= 0 && carry; i-- {
+			if lmant[i] {
+				lmant[i] = false
+			} else {
+				lmant[i] = true
+				carry = false
+			}
+		}
+
+		// Cary the one to the left into a new digit
+		if carry {
+			lmant = append([]bool{true}, lmant...)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Pad/carry local mantissa bits: %s\n", bits_to_string(lmant))
+
+	exp := int32((len(ibits) - 1) - first_one)
+	if carry {
+		exp++
+	}
+
+	fmt.Fprintf(os.Stderr, "Exponent: %d\n", exp)
+
+	exp += f.ExpOffset
+
+	if exp > 0 {
+		ebits := make([]bool, 0, f.ExpWidth)
+
+		for exp != 0 {
+			if exp % 2 == 1 {
+				ebits = append(ebits, true)
+			} else {
+				ebits = append(ebits, false)
+			}
+
+			exp /= 2
+		}
+
+		for int32(len(ebits)) < f.ExpWidth {
+			ebits = append(ebits, false)
+		}
+
+		// put exponent in BE bit order
+		slices.Reverse(ebits)
+
+		if int32(len(ebits)) > f.ExpWidth {
+			fmt.Fprintf(os.Stderr, "TODO: got infinity")
+		} else {
+			f.Sign = is_neg
+			f.Exponent = ebits
+			f.Mantissa = lmant[1:f.ManWidth + 1]
+
+			return true
+		}
+	} else {
+		// possibly denorm, or just zero
+	}
+
+	return false
 }
 
 
@@ -387,8 +475,14 @@ func main() {
 		fmt.Printf("%s\n", s)
 	}
 
-	ok = float_from_string(f, "123.0354766845703125")
+	//ok = float_from_string(f, "123.0354766845703125")
+	//ok = float_from_string(f, "0.1")
+	//ok = float_from_string(f, "0.01234567")
+	//ok = float_from_string(f, "3.33333333333333333333333333333")
+	//ok = float_from_string(f, "3.1415926535897932384626433832795028842")
+	ok = float_from_string(f, "43252003274489856000")
 
+	fmt.Fprintf(os.Stderr, "%s", float_dump_string(f))
 
 	// d := float_from_uint64(0x000FFFFFFFFFFFFF) // Max subnormal 2.2250738585072009 * 10^-308
 
