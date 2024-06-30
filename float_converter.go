@@ -107,7 +107,7 @@ func float_from_uint64(v uint64) *float_plus {
 }
 
 
-func float_to_string(f *float_plus) (bool, string) {
+func float_to_string(f *float_plus, scinot bool) (bool, string) {
 
 	if !validate_float(f) {
 		return false, ""
@@ -249,15 +249,31 @@ func float_to_string(f *float_plus) (bool, string) {
 	}
 
 	istr := inum.Text(10)
-	fstr := fnum.Text(10)
 
+	fstr := fnum.Text(10)
 	zpad := ""
+
+	fnum_is_zero := fnum.Cmp(big.NewInt(0)) == 0
 
 	if len(fstr) < lastone + 1 {
 		zpad = strings.Repeat("0", (lastone + 1) - len(fstr))
 	}
 
-	return true, fmt.Sprintf("%s%s.%s%s", sign, istr, zpad, fstr)
+	if !scinot || fnum_is_zero || len(zpad) < 4 {
+		var decimal_str string
+
+		if fnum_is_zero {
+			decimal_str = ""
+		} else {
+			decimal_str = fmt.Sprintf(".%s%s", zpad, fstr)
+		}
+
+		return true, fmt.Sprintf("%s%s%s", sign, istr, decimal_str)
+	} else {
+		// scientific notation
+
+		return true, fmt.Sprintf("%s%s.%sE-%d", sign, fstr[0:1], fstr[1:], len(zpad) + 1)
+	}
 }
 
 
@@ -318,19 +334,42 @@ func main() {
 	//f.Mantissa[0] = true
 	//f.Mantissa[22] = true
 
-
-	// f := float_from_uint32(0x40490fdb) // Pi -- 3.1415927410125732421875
-
-	// ok, s := float_to_string(f)
+	// ok, s := float_to_string(f, true)
 
 	// if ok {
 	// 	fmt.Printf("%s\n", s)
 	// }
 
 
-	f := float_from_uint32(0x00400000) // Subnormal 5.877471754111437539843683E-39
+	f := float_from_uint32(0x40490fdb) // Pi -- 3.1415927410125732421875
 
-	ok, s := float_to_string(f)
+	ok, s := float_to_string(f, true)
+
+	if ok {
+		fmt.Printf("%s\n", s)
+	}
+
+
+	f = float_from_uint32(0x00400000) // Subnormal 5.877471754111437539843683E-39
+
+	ok, s = float_to_string(f, true)
+
+	if ok {
+		fmt.Printf("%s\n", s)
+	}
+
+	f = float_from_uint32(0x40000000) // 2
+
+	ok, s = float_to_string(f, true)
+
+	if ok {
+		fmt.Printf("%s\n", s)
+	}
+
+
+	f = float_from_uint32(0x7f400000) // 2.552117751907038475975310E+38
+
+	ok, s = float_to_string(f, true)
 
 	if ok {
 		fmt.Printf("%s\n", s)
@@ -347,7 +386,7 @@ func main() {
 
 	d := float_from_uint64(0x000FFFFFFFFFFFFF) // Max subnormal 2.2250738585072009 * 10^-308
 
-	ok, s = float_to_string(d)
+	ok, s = float_to_string(d, true)
 
 	if ok {
 		fmt.Printf("%s\n", s)
