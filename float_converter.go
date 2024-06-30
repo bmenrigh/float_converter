@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"os"
+	"slices"
 )
 
 
@@ -277,69 +278,106 @@ func float_to_string(f *float_plus, scinot bool) (bool, string) {
 }
 
 
+func float_from_string(f *float_plus, s string) bool {
+
+	if len(s) < 1 {
+		return false
+	}
+
+	is_neg := false
+	if s[:1] == "-" {
+		is_neg = true
+
+		s = s[1:] // reslice to get rid of negative sign
+	}
+
+	fmt.Fprintf(os.Stderr, "is negative: %t\n", is_neg);
+
+	s_parts := strings.Split(s, ".")
+
+	if len(s_parts) > 2 {
+		return false
+	}
+
+	inum, ok := new(big.Int).SetString(s_parts[0], 10)
+	if !ok {
+		return false
+	}
+
+	fnum := big.NewInt(0)
+	if len(s_parts) > 1 {
+		fnum, ok = new(big.Int).SetString(s_parts[1], 10)
+
+		if !ok {
+			return false
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "got ipart: %s\n", inum.Text(10))
+	fmt.Fprintf(os.Stderr, "got fpart: %s\n", fnum.Text(10))
+
+
+	ibits := make([]bool, 0)
+
+	for inum.Cmp(big.NewInt(0)) != 0 {
+
+		if new(big.Int).Mod(inum, big.NewInt(2)).Cmp(big.NewInt(0)) != 0 {
+			ibits = append(ibits, true)
+		} else {
+			ibits = append(ibits, false)
+		}
+
+		inum = new(big.Int).Div(inum, big.NewInt(2))
+	}
+
+	// Now put the bits in the correct "BE" order
+	slices.Reverse(ibits)
+
+	fmt.Fprintf(os.Stderr, "Got inum bits: ");
+	for i := 0; i < len(ibits); i++ {
+		if ibits[i] {
+			fmt.Fprint(os.Stderr, "1")
+		} else {
+			fmt.Fprint(os.Stderr, "0")
+		}
+	}
+	fmt.Fprint(os.Stderr, "\n")
+
+
+	flimit := big.NewInt(1)
+
+	for i := 0; i < len(s_parts[1]); i++ {
+		flimit = new(big.Int).Mul(flimit, big.NewInt(10))
+	}
+
+	fbits := make([]bool, 0)
+	for fnum.Cmp(big.NewInt(0)) > 0 {
+		fnum = new(big.Int).Mul(fnum, big.NewInt(2))
+
+		if fnum.Cmp(flimit) >= 0 {
+			fbits = append(fbits, true)
+
+			fnum = new(big.Int).Sub(fnum, flimit)
+		} else {
+			fbits = append(fbits, false)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "Got fnum bits: ");
+	for i := 0; i < len(fbits); i++ {
+		if fbits[i] {
+			fmt.Fprint(os.Stderr, "1")
+		} else {
+			fmt.Fprint(os.Stderr, "0")
+		}
+	}
+	fmt.Fprint(os.Stderr, "\n")
+
+	return true
+}
+
+
 func main() {
-
-	// f := new(float_plus)
-
-	// f.ExpWidth = 8
-	// f.ExpOffset = 127
-	// f.ManWidth = 23
-	// f.AllowSubnorm = true
-
-	// f.Exponent = make([]bool, f.ExpWidth)
-	// f.Mantissa = make([]bool, f.ManWidth)
-
-	// 1.75
-	// f.Exponent = []bool{false, true, true, true, true, true, true, true}
-	// f.Mantissa[0] = true
-	// f.Mantissa[1] = true
-
-	// 3.5
-	// f.Exponent = []bool{true, false, false, false, false, false, false, false}
-	// f.Mantissa[0] = true
-	// f.Mantissa[1] = true
-
-	// 2.0000002384185791015625
-	//f.Exponent = []bool{true, false, false, false, false, false, false, false}
-	//f.Mantissa[22] = true
-
-	// 0.5
-	//f.Exponent = []bool{false, true, true, true, true, true, true, false}
-
-	// 0.1328125
-	//f.Exponent = []bool{false, true, true, true, true, true, false, false}
-	//f.Mantissa[3] = true
-
-	// 1.248962747748680477216783E-38
-	//f.Exponent = []bool{false, false, false, false, false, false, false, true}
-	//f.Mantissa[3] = true
-
-	// 237684506432258944259212705792
-	// f.Exponent = []bool{true, true, true, false, false, false, false, false}
-	// f.Mantissa[0] = true
-	// f.Mantissa[22] = true
-
-	// 6291456.5
-	// f.Exponent = []bool{true, false, false, true, false, true, false, true}
-	// f.Mantissa[0] = true
-	// f.Mantissa[22] = true
-
-	// 12582913
-	// f.Exponent = []bool{true, false, false, true, false, true, true, false}
-	// f.Mantissa[0] = true
-	// f.Mantissa[22] = true
-
-	// 25165826
-	//f.Exponent = []bool{true, false, false, true, false, true, true, true}
-	//f.Mantissa[0] = true
-	//f.Mantissa[22] = true
-
-	// ok, s := float_to_string(f, true)
-
-	// if ok {
-	// 	fmt.Printf("%s\n", s)
-	// }
-
 
 	f := float_from_uint32(0x40490fdb) // Pi -- 3.1415927410125732421875
 
@@ -349,46 +387,14 @@ func main() {
 		fmt.Printf("%s\n", s)
 	}
 
-
-	f = float_from_uint32(0x00400000) // Subnormal 5.877471754111437539843683E-39
-
-	ok, s = float_to_string(f, true)
-
-	if ok {
-		fmt.Printf("%s\n", s)
-	}
-
-	f = float_from_uint32(0x40000000) // 2
-
-	ok, s = float_to_string(f, true)
-
-	if ok {
-		fmt.Printf("%s\n", s)
-	}
+	ok = float_from_string(f, "123.0354766845703125")
 
 
-	f = float_from_uint32(0x7f400000) // 2.552117751907038475975310E+38
+	// d := float_from_uint64(0x000FFFFFFFFFFFFF) // Max subnormal 2.2250738585072009 * 10^-308
 
-	ok, s = float_to_string(f, true)
-
-	if ok {
-		fmt.Printf("%s\n", s)
-	}
-
-
-	// d := float_from_uint64(0x400921FB54442D18) // Pi
-
-	// ok, s = float_to_string(d)
+	// ok, s = float_to_string(d, true)
 
 	// if ok {
 	// 	fmt.Printf("%s\n", s)
 	// }
-
-	d := float_from_uint64(0x000FFFFFFFFFFFFF) // Max subnormal 2.2250738585072009 * 10^-308
-
-	ok, s = float_to_string(d, true)
-
-	if ok {
-		fmt.Printf("%s\n", s)
-	}
 }
